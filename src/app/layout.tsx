@@ -2,8 +2,9 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Statementify - Bank Statement Converter",
-  description: "Convert bank statements (PDFs, scans) to CSV, Excel, JSON, OFX/QFX, QIF formats",
+  title: "Statementify",
+  description:
+    "Convert PDF bank statements into reviewable transaction exports for CSV, Excel, JSON, OFX/QFX, and QIF.",
 };
 
 export default function RootLayout({

@@ -1,37 +1,36 @@
-# Dependencies
+# dependencies
 /node_modules
 /.pnp
 .pnp.js
+.yarn/install-state.gz
 
-# Testing
-/coverage
-
-# Next.js
+# next.js
 /.next/
 /out/
-
-# Production
 /build
 
-# Misc
+# coverage / reports
+/coverage
+
+# local tooling / editor noise
+.vercel
+.history/
+.brv/
+*.tsbuildinfo
+next-env.d.ts
 .DS_Store
 *.pem
 
-# Debug
+# local env files
+.env*.local
+.env
+
+# debug / test artifacts
 npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
-
-# Local env files
-.env*.local
-
-# Vercel
-.vercel
-
-# TypeScript
-*.tsbuildinfo
-next-env.d.ts
-
-# IDE
-.vscode/
-.idea/
+debug-*.ts
+debug-*.js
+test-*.ts
+test-*.js
+test-*.pdf

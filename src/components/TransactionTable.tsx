@@ -112,7 +112,7 @@ export default function TransactionTable({ transactions }: TransactionTableProps
         </div>
         <h3 className="text-lg font-medium text-[var(--foreground)] mb-1">No transactions found</h3>
         <p className="text-sm text-[var(--muted-foreground)] max-w-xs">
-          We couldn't extract any transactions from this PDF. Try a different bank statement format.
+          We couldn&apos;t extract any transactions from this PDF. Try a different bank statement format.
         </p>
       </div>
     );

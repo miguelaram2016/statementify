@@ -3,17 +3,80 @@
 @tailwind utilities;
 
 :root {
-  --foreground-rgb: 0, 0, 0;
-  --background-start-rgb: 214, 219, 220;
-  --background-end-rgb: 255, 255, 255;
+  --background: #050816;
+  --foreground: #f5f7fb;
+  --card: rgba(12, 18, 33, 0.92);
+  --muted: rgba(255, 255, 255, 0.05);
+  --border: rgba(255, 255, 255, 0.1);
+  --muted-foreground: #a4acc0;
+  --accent: #7c9cff;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: dark;
 }
 
 body {
-  color: rgb(var(--foreground-rgb));
-  background: linear-gradient(
-      to bottom,
-      transparent,
-      rgb(var(--background-end-rgb))
-    )
-    rgb(var(--background-start-rgb));
+  margin: 0;
+  min-height: 100vh;
+  color: var(--foreground);
+  background:
+    radial-gradient(circle at top, rgba(124, 156, 255, 0.16), transparent 28%),
+    linear-gradient(180deg, #08111f 0%, #050816 100%);
+  font-family: Arial, Helvetica, sans-serif;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.glow {
+  box-shadow: 0 0 0 1px rgba(124, 156, 255, 0.12), 0 14px 50px rgba(124, 156, 255, 0.12);
+}
+
+@keyframes pulse-border {
+  0%,
+  100% {
+    box-shadow: 0 0 0 0 rgba(124, 156, 255, 0.22);
+  }
+  50% {
+    box-shadow: 0 0 0 6px rgba(124, 156, 255, 0.08);
+  }
+}
+
+.animate-pulse-border {
+  animation: pulse-border 1.8s ease-in-out infinite;
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.35s ease-out both;
+}
+
+@keyframes spin-slow {
+  from {
+    transform: rotate(0deg);
+  }
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.animate-spin-slow {
+  animation: spin-slow 1s linear infinite;
 }
