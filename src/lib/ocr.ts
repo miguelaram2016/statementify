@@ -41,6 +41,13 @@ export interface ProcessedDocumentResult {
   textLength: number;
 }
 
+/**
+ * Loads pdf.js lazily in the browser.
+ *
+ * We keep this dynamic because the library depends on browser globals and would
+ * otherwise break server-side rendering in Next.js. The worker path is also set
+ * here so the rest of the pipeline can stay focused on extraction logic.
+ */
 function loadPdfJs(): Promise<PdfJsLib> {
   return new Promise((resolve, reject) => {
     if (window.pdfjsLib) {
@@ -64,12 +71,20 @@ function loadPdfJs(): Promise<PdfJsLib> {
   });
 }
 
-async function loadPdf(file: File): Promise<PdfDocumentProxy> {
-  const pdfjsLib = await loadPdfJs();
-  const arrayBuffer = await file.arrayBuffer();
-  return pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+function loadPdf(file: File): Promise<PdfDocumentProxy> {
+  return loadPdfJs().then(async (pdfjsLib) => {
+    const arrayBuffer = await file.arrayBuffer();
+    return pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+  });
 }
 
+/**
+ * Reads a PDF's embedded text layer page by page.
+ *
+ * This is the fast path and should win whenever the statement is a normal,
+ * digitally generated PDF. We preserve line breaks loosely because the parser
+ * relies on line structure to find dates, descriptions, and money values.
+ */
 async function extractEmbeddedText(
   pdf: PdfDocumentProxy,
   onProgress?: (status: string, page?: number, total?: number) => void
@@ -93,6 +108,12 @@ async function extractEmbeddedText(
   return chunks.join("\n\n").trim();
 }
 
+/**
+ * Renders each PDF page onto a canvas so Tesseract can OCR it.
+ *
+ * The scale of 2 is a compromise: sharper than 1x for OCR accuracy without
+ * exploding memory usage too badly on multi-page statements.
+ */
 async function renderPdfToImages(
   pdf: PdfDocumentProxy,
   onProgress?: (page: number, total: number) => void
@@ -118,6 +139,12 @@ async function renderPdfToImages(
   return canvases;
 }
 
+/**
+ * OCRs pre-rendered canvases one page at a time.
+ *
+ * We intentionally keep this sequential. Running multiple OCR jobs in parallel
+ * can blow up memory on real-world laptops and often feels slower overall.
+ */
 async function ocrCanvases(
   canvases: HTMLCanvasElement[],
   onProgress?: (page: number, total: number, status: string) => void
@@ -141,6 +168,13 @@ async function ocrCanvases(
   return texts.join("\n").trim();
 }
 
+/**
+ * Decides whether the embedded text result is trustworthy enough to skip OCR.
+ *
+ * Statement PDFs often include a technically valid text layer that is still too
+ * sparse or too mangled to parse. We fallback when the text is obviously thin or
+ * when it contains too little numeric structure to represent transaction rows.
+ */
 function shouldFallbackToOcr(rawText: string, transactions: Transaction[]): boolean {
   const normalizedLength = rawText.replace(/\s+/g, "").length;
   if (normalizedLength < 120) return true;
@@ -152,6 +186,15 @@ function shouldFallbackToOcr(rawText: string, transactions: Transaction[]): bool
   return digits < 40 || moneyLike < 3 || normalizedLength < 500;
 }
 
+/**
+ * End-to-end document pipeline for one statement PDF.
+ *
+ * Order matters:
+ * 1. load the PDF
+ * 2. try embedded text first
+ * 3. parse transactions from that text
+ * 4. only then fallback to OCR when the fast path looks unreliable
+ */
 export async function processStatementFile(
   file: File,
   onProgress?: (status: string, page?: number, total?: number) => void

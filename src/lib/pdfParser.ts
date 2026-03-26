@@ -26,6 +26,11 @@ interface DateMatch {
   index: number;
 }
 
+/**
+ * Infers whether the statement behaves more like a card statement or a checking
+ * statement. That matters because the same positive number can mean either a
+ * purchase or a deposit depending on account type.
+ */
 export function detectStatementType(text: string): AccountType {
   const t = text.toUpperCase();
 
@@ -92,6 +97,11 @@ function makeDate(year: number, month: number, day: number): Date {
   return new Date(year, month - 1, day);
 }
 
+/**
+ * When a statement line has only month/day, estimate the year from the overall
+ * statement period if we could detect one. This keeps December/January rollover
+ * cases from defaulting to the current year incorrectly.
+ */
 function inferYear(month: number, day: number, ctx: StatementContext): number {
   if (ctx.startDate && ctx.endDate) {
     const candidates = [ctx.startDate.getFullYear() - 1, ctx.startDate.getFullYear(), ctx.endDate.getFullYear(), ctx.endDate.getFullYear() + 1];
@@ -119,6 +129,10 @@ function inferYear(month: number, day: number, ctx: StatementContext): number {
   return new Date().getFullYear();
 }
 
+/**
+ * Pulls the visible statement period out of the document so partial dates later
+ * in the parser can inherit the right year.
+ */
 function extractStatementPeriod(text: string): Pick<StatementContext, "startDate" | "endDate"> {
   const normalized = text.replace(/\s+/g, " ");
 
@@ -157,6 +171,15 @@ function extractStatementPeriod(text: string): Pick<StatementContext, "startDate
   return {};
 }
 
+/**
+ * Finds all usable date tokens on a line and normalizes them into ISO strings.
+ *
+ * We support:
+ * - mm/dd/yyyy
+ * - mm/dd/yy
+ * - mm/dd (year inferred from statement period)
+ * - textual months like "Jan 5 2026"
+ */
 function extractAllDates(line: string, ctx: StatementContext): DateMatch[] {
   const matches: DateMatch[] = [];
 
@@ -215,6 +238,13 @@ function extractAllDates(line: string, ctx: StatementContext): DateMatch[] {
   });
 }
 
+/**
+ * Extracts money-like values from a line or line group.
+ *
+ * We keep only positive numbers here and decide the final sign later using the
+ * inferred account behavior. That avoids double-negating lines that already use
+ * statement-specific debit/credit conventions.
+ */
 function extractAmounts(line: string): number[] {
   const matches = [...line.matchAll(/\(?-?\$?\s*([\d,]+\.\d{2})\)?/g)];
   const amounts = matches
@@ -265,6 +295,10 @@ function isMostlyGarbage(line: string): boolean {
   return false;
 }
 
+/**
+ * Filters out boilerplate that commonly appears around statements but should not
+ * become transactions.
+ */
 function isNoiseLine(line: string): boolean {
   if (isMostlyGarbage(line)) return true;
   if (looksLikeHeader(line)) return true;
@@ -291,11 +325,19 @@ function isNoiseLine(line: string): boolean {
   return noisyPhrases.some((pattern) => pattern.test(line));
 }
 
+/**
+ * Some card statements include two dates followed by $0.00 pre-auth rows. They
+ * are real lines in the PDF, but useless for exports.
+ */
 function isZeroAuthLine(line: string): boolean {
   const compact = line.replace(/\s+/g, " ").trim();
   return /^\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\s+\$?0\.00$/i.test(compact);
 }
 
+/**
+ * Removes dates, amounts, reference fragments, and OCR junk so the remaining
+ * text is more likely to be a merchant/payee description.
+ */
 function cleanDescription(value: string): string {
   return value
     .replace(/\b\d{1,2}[\/\-]\d{1,2}(?:[\/\-]\d{2,4})?\b/g, " ")
@@ -329,6 +371,18 @@ function shouldSkipTransaction(description: string, amount: number): boolean {
   return false;
 }
 
+/**
+ * Main text-to-transactions parser.
+ *
+ * Strategy:
+ * - normalize and split the document into lines
+ * - find lines that look transaction-like because they contain a date
+ * - optionally pull in one or two continuation lines for wrapped descriptions
+ * - extract the most likely amount
+ * - clean the leftover description text
+ * - infer the final sign based on account type
+ * - de-duplicate the final output
+ */
 export function parseTransactionsFromText(text: string, accountType?: AccountType): Transaction[] {
   console.log("[pdfParser] Input text length:", text.length);
 
@@ -381,6 +435,8 @@ export function parseTransactionsFromText(text: string, accountType?: AccountTyp
     const nonZeroAmounts = amounts.filter((amount) => amount > 0);
     if (nonZeroAmounts.length === 0) continue;
 
+    // Most statement rows end with the transaction amount, while earlier numbers
+    // tend to be balances, references, or repeated OCR fragments.
     let amount = nonZeroAmounts[nonZeroAmounts.length - 1];
     const primaryDate = dateMatches[0];
 

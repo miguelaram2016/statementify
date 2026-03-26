@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { type Transaction } from "@/lib/pdfParser";
 
 interface Props {
@@ -12,6 +12,13 @@ interface Props {
 }
 
 type EditableField = "date" | "description" | "amount";
+
+function formatCurrency(amount: number): string {
+  return new Intl.NumberFormat("en-US", {
+    style: "currency",
+    currency: "USD",
+  }).format(amount);
+}
 
 export default function TransactionEditor({ transactions, accountType, onUpdate, onBack, onExport }: Props) {
   const [rows, setRows] = useState<Transaction[]>(transactions);
@@ -74,21 +81,31 @@ export default function TransactionEditor({ transactions, accountType, onUpdate,
   const allPositive = rows.length > 0 && rows.every((transaction) => transaction.amount > 0);
   const showCheckingWarning = type === "checking" && allPositive;
 
+  const summaryCards = useMemo(
+    () => [
+      { label: "Transactions", value: rows.length.toLocaleString() },
+      { label: "Net total", value: formatCurrency(net), tone: net >= 0 ? "text-[var(--success)]" : "text-[var(--danger)]" },
+      { label: "Date range", value: dateRange },
+    ],
+    [dateRange, net, rows.length]
+  );
+
   return (
-    <div className="p-6">
-      <div className="mb-4 flex items-center justify-between gap-4">
+    <div className="p-6 md:p-8">
+      <div className="flex flex-col gap-5 xl:flex-row xl:items-start xl:justify-between">
         <div>
-          <h2 className="text-xl font-bold">Review transactions</h2>
-          <p className="mt-1 text-sm text-[var(--muted-foreground)]">
-            Fix anything that looks off before exporting. OCR and parser guesses are helpful, not magic.
+          <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Review + refine</p>
+          <h2 className="mt-2 text-2xl font-bold tracking-[-0.02em] text-[var(--foreground)]">Check the extracted transactions before export</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-7 text-[var(--muted-foreground)]">
+            Fix anything that looks off. OCR and parser guesses are useful, but finance data deserves a quick human pass.
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-[var(--muted-foreground)]">Account type:</span>
+        <div className="surface-soft rounded-2xl px-4 py-3">
+          <label className="mb-2 block text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Account type</label>
           <select
             value={type}
             onChange={(event) => handleTypeChange(event.target.value as "credit_card" | "checking")}
-            className="rounded border border-[var(--border)] bg-[var(--card)] px-3 py-1 text-sm focus:border-[var(--accent)] focus:outline-none"
+            className="rounded-xl border border-[var(--border)] bg-white px-3 py-2 text-sm font-medium text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:ring-4 focus:ring-[var(--accent-soft)]"
           >
             <option value="credit_card">Credit card</option>
             <option value="checking">Checking / savings</option>
@@ -96,59 +113,63 @@ export default function TransactionEditor({ transactions, accountType, onUpdate,
         </div>
       </div>
 
-      <p className="mb-1 text-sm text-[var(--muted-foreground)]">
-        {rows.length} transactions · Net:{" "}
-        <span className={net >= 0 ? "text-green-400" : "text-red-400"}>${net.toFixed(2)}</span> · {dateRange}
-      </p>
+      <div className="mt-6 grid gap-3 md:grid-cols-3">
+        {summaryCards.map((item) => (
+          <div key={item.label} className="surface-soft rounded-2xl px-4 py-4">
+            <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">{item.label}</p>
+            <p className={`mt-2 text-base font-semibold ${item.tone ?? "text-[var(--foreground)]"}`}>{item.value}</p>
+          </div>
+        ))}
+      </div>
 
       {showCheckingWarning && (
-        <div className="mb-4 rounded-lg border border-yellow-500/30 bg-yellow-500/10 p-3 text-sm text-yellow-300">
+        <div className="mt-5 rounded-2xl border border-[var(--warning)]/18 bg-[var(--warning-soft)] p-4 text-sm leading-7 text-[var(--warning)]">
           All transactions are positive. For checking and savings accounts, withdrawals usually need to be negative. If this is actually a card statement, switch the account type above.
         </div>
       )}
 
-      <div className="mb-6 overflow-x-auto rounded-lg border border-[var(--border)]">
-        <table className="w-full text-sm">
+      <div className="mt-6 overflow-x-auto rounded-[24px] border border-[var(--border)] bg-white">
+        <table className="w-full min-w-[720px] text-sm">
           <thead className="bg-[var(--muted)]">
             <tr>
-              <th className="p-2 text-left text-xs font-medium text-[var(--muted-foreground)]">Date</th>
-              <th className="p-2 text-left text-xs font-medium text-[var(--muted-foreground)]">Description</th>
-              <th className="p-2 text-right text-xs font-medium text-[var(--muted-foreground)]">Amount</th>
-              <th className="w-10 p-2" aria-label="Actions"></th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Date</th>
+              <th className="px-4 py-3 text-left text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Description</th>
+              <th className="px-4 py-3 text-right text-xs font-semibold uppercase tracking-[0.16em] text-[var(--muted-foreground)]">Amount</th>
+              <th className="w-14 px-4 py-3" aria-label="Actions"></th>
             </tr>
           </thead>
           <tbody>
             {rows.map((transaction, index) => (
-              <tr key={`${transaction.date}-${transaction.description}-${index}`} className="border-t border-[var(--border)]">
-                <td className="p-1">
+              <tr key={`${transaction.date}-${transaction.description}-${index}`} className="border-t border-[var(--border)]/80 hover:bg-slate-50/80">
+                <td className="px-3 py-2">
                   <input
                     value={transaction.date}
                     onChange={(event) => updateRow(index, "date", event.target.value)}
-                    className="w-full border-b border-[var(--border)] bg-transparent px-2 py-1 outline-none focus:border-[var(--accent)]"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-3 py-2 font-medium text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:bg-[var(--accent-soft)]/40"
                   />
                 </td>
-                <td className="p-1">
+                <td className="px-3 py-2">
                   <input
                     value={transaction.description}
                     onChange={(event) => updateRow(index, "description", event.target.value)}
-                    className="w-full border-b border-[var(--border)] bg-transparent px-2 py-1 outline-none focus:border-[var(--accent)]"
+                    className="w-full rounded-xl border border-transparent bg-transparent px-3 py-2 text-[var(--foreground)] outline-none transition focus:border-[var(--accent)] focus:bg-[var(--accent-soft)]/40"
                   />
                 </td>
-                <td className="p-1">
+                <td className="px-3 py-2">
                   <input
                     type="number"
                     step="0.01"
                     value={transaction.amount}
                     onChange={(event) => updateRow(index, "amount", Number.parseFloat(event.target.value) || 0)}
-                    className={`w-full border-b border-[var(--border)] bg-transparent px-2 py-1 text-right outline-none focus:border-[var(--accent)] ${
-                      transaction.amount < 0 ? "text-green-400" : "text-red-400"
+                    className={`w-full rounded-xl border border-transparent bg-transparent px-3 py-2 text-right font-semibold outline-none transition focus:border-[var(--accent)] focus:bg-[var(--accent-soft)]/40 ${
+                      transaction.amount < 0 ? "text-[var(--danger)]" : "text-[var(--success)]"
                     }`}
                   />
                 </td>
-                <td className="p-1 text-center">
+                <td className="px-3 py-2 text-center">
                   <button
                     onClick={() => deleteRow(index)}
-                    className="flex h-6 w-6 items-center justify-center rounded text-xs text-red-400 transition-colors hover:bg-red-400/10 hover:text-red-300"
+                    className="inline-flex h-9 w-9 items-center justify-center rounded-xl text-sm text-[var(--danger)] transition-colors hover:bg-[var(--danger-soft)]"
                     aria-label={`Delete row ${index + 1}`}
                   >
                     ✕
@@ -162,7 +183,7 @@ export default function TransactionEditor({ transactions, accountType, onUpdate,
 
       <button
         onClick={addRow}
-        className="mb-6 flex items-center gap-1.5 rounded px-2 py-1 text-sm text-[var(--accent)] transition-colors hover:bg-[var(--accent)]/10 hover:text-[var(--accent)]/80"
+        className="mt-5 inline-flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold text-[var(--accent)] transition-colors hover:bg-[var(--accent-soft)]"
       >
         <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
           <path d="M6 2v8M2 6h8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
@@ -170,11 +191,14 @@ export default function TransactionEditor({ transactions, accountType, onUpdate,
         Add row
       </button>
 
-      <div className="flex gap-3">
-        <button onClick={onBack} className="rounded-lg border border-[var(--border)] px-4 py-2 text-sm transition-colors hover:bg-[var(--muted)]">
+      <div className="mt-8 flex flex-wrap gap-3">
+        <button onClick={onBack} className="rounded-xl border border-[var(--border)] bg-white px-4 py-2.5 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]">
           ← Back
         </button>
-        <button onClick={handleApplyAndExport} className="rounded-lg bg-[var(--accent)] px-4 py-2 text-sm font-semibold transition-opacity hover:opacity-90">
+        <button
+          onClick={handleApplyAndExport}
+          className="rounded-xl bg-[var(--accent)] px-4 py-2.5 text-sm font-semibold text-white shadow-sm transition hover:bg-[var(--accent-strong)]"
+        >
           Continue to export
         </button>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useCallback, useState } from "react";
+import React, { useCallback, useMemo, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import TransactionTable from "@/components/TransactionTable";
 import TransactionEditor from "@/components/TransactionEditor";
@@ -36,25 +36,34 @@ function Spinner({ size = 24 }: { size?: number }) {
   );
 }
 
+function StatusBadge({ children }: { children: React.ReactNode }) {
+  return (
+    <span className="inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/15 bg-[var(--accent-soft)] px-3 py-1.5 text-xs font-semibold text-[var(--accent-strong)]">
+      <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)]" />
+      {children}
+    </span>
+  );
+}
+
 function FileCard({ file, onRemove }: { file: File; onRemove: () => void }) {
   return (
-    <div className="flex items-center justify-between gap-3 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 animate-fade-in">
+    <div className="surface-soft flex items-center justify-between gap-3 rounded-2xl px-4 py-3 animate-fade-in">
       <div className="flex min-w-0 items-center gap-3">
-        <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-lg border border-red-500/20 bg-red-500/10">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="text-red-400">
+        <div className="flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-xl border border-[var(--accent)]/12 bg-[var(--accent-soft)] text-[var(--accent)]">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none">
             <path d="M3 2h7l3 3v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.2" />
             <path d="M10 2v3.5h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
             <path d="M6 9h4M6 11h3" stroke="currentColor" strokeWidth="1.2" strokeLinecap="round" />
           </svg>
         </div>
         <div className="min-w-0">
-          <p className="truncate text-sm font-medium">{file.name}</p>
+          <p className="truncate text-sm font-semibold text-[var(--foreground)]">{file.name}</p>
           <p className="text-xs text-[var(--muted-foreground)]">{(file.size / 1024).toFixed(1)} KB</p>
         </div>
       </div>
       <button
         onClick={onRemove}
-        className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-md text-[var(--muted-foreground)] transition-all hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
+        className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-lg text-[var(--muted-foreground)] transition-all hover:bg-[var(--danger-soft)] hover:text-[var(--danger)]"
         aria-label={`Remove ${file.name}`}
       >
         <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
@@ -67,10 +76,10 @@ function FileCard({ file, onRemove }: { file: File; onRemove: () => void }) {
 
 type ExportFormat = "csv" | "excel" | "json" | "ofx" | "qif";
 
-const EXPORT_CONFIG: Record<ExportFormat, { label: string; icon: React.ReactNode; color: string }> = {
+const EXPORT_CONFIG: Record<ExportFormat, { label: string; icon: React.ReactNode; tone: string }> = {
   csv: {
     label: "CSV",
-    color: "hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400",
+    tone: "hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700",
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M3 2h5l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.2" />
@@ -81,7 +90,7 @@ const EXPORT_CONFIG: Record<ExportFormat, { label: string; icon: React.ReactNode
   },
   excel: {
     label: "Excel",
-    color: "hover:border-emerald-500/50 hover:bg-emerald-500/10 hover:text-emerald-400",
+    tone: "hover:border-emerald-200 hover:bg-emerald-50 hover:text-emerald-700",
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M3 2h5l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.2" />
@@ -92,7 +101,7 @@ const EXPORT_CONFIG: Record<ExportFormat, { label: string; icon: React.ReactNode
   },
   json: {
     label: "JSON",
-    color: "hover:border-yellow-500/50 hover:bg-yellow-500/10 hover:text-yellow-400",
+    tone: "hover:border-amber-200 hover:bg-amber-50 hover:text-amber-700",
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M3 2h5l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.2" />
@@ -103,7 +112,7 @@ const EXPORT_CONFIG: Record<ExportFormat, { label: string; icon: React.ReactNode
   },
   ofx: {
     label: "OFX/QFX",
-    color: "hover:border-blue-500/50 hover:bg-blue-500/10 hover:text-blue-400",
+    tone: "hover:border-sky-200 hover:bg-sky-50 hover:text-sky-700",
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M3 2h5l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.2" />
@@ -114,7 +123,7 @@ const EXPORT_CONFIG: Record<ExportFormat, { label: string; icon: React.ReactNode
   },
   qif: {
     label: "QIF",
-    color: "hover:border-purple-500/50 hover:bg-purple-500/10 hover:text-purple-400",
+    tone: "hover:border-violet-200 hover:bg-violet-50 hover:text-violet-700",
     icon: (
       <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
         <path d="M3 2h5l3 3v7a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1V3a1 1 0 0 1 1-1z" stroke="currentColor" strokeWidth="1.2" />
@@ -140,10 +149,9 @@ function ExportButton({
       onClick={onClick}
       disabled={disabled}
       className={`
-        flex items-center gap-2 rounded-lg border border-[var(--border)] bg-[var(--card)] px-4 py-2 text-sm font-medium
-        text-[var(--muted-foreground)] transition-all duration-200
-        disabled:cursor-not-allowed disabled:opacity-40
-        ${config.color}
+        flex items-center gap-2 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-semibold
+        text-[var(--foreground)] transition-all duration-200
+        disabled:cursor-not-allowed disabled:opacity-40 ${config.tone}
       `}
     >
       {config.icon}
@@ -153,6 +161,21 @@ function ExportButton({
 }
 
 const SOURCE_URL = "https://github.com/miguelaram2016/statementify";
+
+const FEATURE_CARDS = [
+  {
+    title: "Review before export",
+    desc: "Every run lands in an editable table first, so you can fix dates, descriptions, amounts, and duplicates before downloading.",
+  },
+  {
+    title: "Fast by default",
+    desc: "Text-based PDFs are parsed in-browser first, with OCR only used when a scan actually needs it.",
+  },
+  {
+    title: "Built for finance imports",
+    desc: "Export to CSV, Excel, JSON, OFX/QFX, or QIF without retyping a statement into your spreadsheet or app.",
+  },
+];
 
 export default function HomePage() {
   const [files, setFiles] = useState<File[]>([]);
@@ -164,6 +187,35 @@ export default function HomePage() {
   const [editedTransactions, setEditedTransactions] = useState<Transaction[]>([]);
   const [editedAccountType, setEditedAccountType] = useState<"credit_card" | "checking">("checking");
   const [processingSummary, setProcessingSummary] = useState<string>("");
+  const [lastExportedFormat, setLastExportedFormat] = useState<ExportFormat | null>(null);
+  const [lastExportedAt, setLastExportedAt] = useState<string>("");
+
+  const quickStats = useMemo(
+    () => [
+      { label: "Formats", value: "CSV, Excel, JSON, OFX/QFX, QIF" },
+      { label: "Processing", value: "Local-first in your browser" },
+      { label: "Best case", value: "Instant on text PDFs" },
+    ],
+    []
+  );
+
+  const workflowSteps = useMemo(
+    () => [
+      { key: "upload", label: "Upload PDFs", desc: "Add one or more statement files" },
+      { key: "preview", label: "Review rows", desc: "Fix parser or OCR mistakes" },
+      { key: "export", label: "Export", desc: "Download the final cleaned data" },
+    ],
+    []
+  );
+
+  const trustChecklist = useMemo(
+    () => [
+      "Files stay in the browser during parsing.",
+      "Scanned PDFs may take longer because OCR runs page by page.",
+      "Final review is built into the workflow before export.",
+    ],
+    []
+  );
 
   const processFiles = useCallback(async (filesToProcess: File[]) => {
     setIsProcessing(true);
@@ -247,6 +299,8 @@ export default function HomePage() {
     setView("upload");
     setEditedTransactions([]);
     setProcessingSummary("");
+    setLastExportedFormat(null);
+    setLastExportedAt("");
   };
 
   const handleEditorUpdate = (txns: Transaction[], accountType: "credit_card" | "checking") => {
@@ -261,6 +315,8 @@ export default function HomePage() {
     setFiles([]);
     setError(null);
     setProcessingSummary("");
+    setLastExportedFormat(null);
+    setLastExportedAt("");
   };
 
   const handleEditorExport = () => {
@@ -288,143 +344,246 @@ export default function HomePage() {
         downloadQIF(editedTransactions, filename);
         break;
     }
+
+    setLastExportedFormat(format);
+    setLastExportedAt(
+      new Date().toLocaleTimeString([], {
+        hour: "numeric",
+        minute: "2-digit",
+      })
+    );
   };
 
   const ExportBar = ({ showBack }: { showBack?: boolean }) => (
     <div className="space-y-6 animate-fade-in">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-wrap items-center gap-3">
-          {files.map((file, index) => (
-            <FileCard key={`${file.name}-${index}`} file={file} onRemove={() => handleRemoveFile(index)} />
-          ))}
+      <div className="glass-card rounded-[28px] p-5">
+        <div className="flex flex-col gap-4 xl:flex-row xl:items-center xl:justify-between">
+          <div className="flex flex-wrap items-center gap-3">
+            {files.map((file, index) => (
+              <FileCard key={`${file.name}-${index}`} file={file} onRemove={() => handleRemoveFile(index)} />
+            ))}
+          </div>
+          {showBack ? (
+            <button
+              onClick={() => setView("preview")}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 7a5 5 0 1 0 1-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                <path d="M2 4V7h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Edit transactions
+            </button>
+          ) : (
+            <button
+              onClick={handleReset}
+              className="flex flex-shrink-0 items-center gap-1.5 rounded-xl border border-[var(--border)] bg-white px-4 py-2 text-sm font-medium text-[var(--foreground)] transition-colors hover:bg-[var(--muted)]"
+            >
+              <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
+                <path d="M2 7a5 5 0 1 0 1-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
+                <path d="M2 4V7h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+              Start over
+            </button>
+          )}
         </div>
-        {showBack ? (
-          <button
-            onClick={() => setView("preview")}
-            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7a5 5 0 1 0 1-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-              <path d="M2 4V7h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Edit transactions
-          </button>
-        ) : (
-          <button
-            onClick={handleReset}
-            className="flex flex-shrink-0 items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm text-[var(--muted-foreground)] transition-colors hover:bg-[var(--muted)] hover:text-[var(--foreground)]"
-          >
-            <svg width="14" height="14" viewBox="0 0 14 14" fill="none">
-              <path d="M2 7a5 5 0 1 0 1-3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" />
-              <path d="M2 4V7h3" stroke="currentColor" strokeWidth="1.3" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-            Start over
-          </button>
-        )}
-      </div>
 
-      <div className="flex flex-col gap-4 rounded-xl border border-[var(--border)] bg-[var(--card)] p-4 sm:flex-row sm:items-center">
-        <div className="space-y-1">
-          <p className="text-sm font-medium text-[var(--foreground)]">
-            {editedTransactions.length} transaction{editedTransactions.length !== 1 ? "s" : ""} ready to export
-          </p>
-          <p className="text-xs text-[var(--muted-foreground)]">
-            {files.length > 1
-              ? "Files are merged into one editable list and sorted by date before export."
-              : "Review the extracted rows before exporting to your finance app."}
-          </p>
-        </div>
-        <div className="flex flex-wrap items-center gap-2 sm:ml-auto">
-          <span className="mr-1 text-xs text-[var(--muted-foreground)]">Export as:</span>
-          {(Object.keys(EXPORT_CONFIG) as ExportFormat[]).map((format) => (
-            <ExportButton
-              key={format}
-              format={format}
-              onClick={() => handleExport(format)}
-              disabled={editedTransactions.length === 0}
-            />
-          ))}
+        <div className="mt-5 flex flex-col gap-4 rounded-2xl bg-[var(--muted)] px-4 py-4 lg:flex-row lg:items-center">
+          <div className="space-y-1">
+            <p className="text-sm font-semibold text-[var(--foreground)]">
+              {editedTransactions.length} transaction{editedTransactions.length !== 1 ? "s" : ""} ready to export
+            </p>
+            <p className="text-xs text-[var(--muted-foreground)]">
+              {files.length > 1
+                ? "Files are merged into one editable list and sorted by date before export."
+                : "Review the extracted rows before exporting to your finance app."}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2 lg:ml-auto">
+            <span className="mr-1 text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Export</span>
+            {(Object.keys(EXPORT_CONFIG) as ExportFormat[]).map((format) => (
+              <ExportButton
+                key={format}
+                format={format}
+                onClick={() => handleExport(format)}
+                disabled={editedTransactions.length === 0}
+              />
+            ))}
+          </div>
         </div>
       </div>
     </div>
   );
 
   return (
-    <div className="mx-auto max-w-6xl px-6 py-16">
-      {view === "upload" && (
-        <div className="mb-12 text-center animate-fade-in">
-          <div className="mb-6 inline-flex items-center gap-2 rounded-full border border-[var(--accent)]/30 bg-[var(--accent)]/5 px-3 py-1.5 text-xs font-medium text-[var(--accent)]">
-            <span className="h-1.5 w-1.5 rounded-full bg-[var(--accent)] animate-pulse" />
-            Open source, local-first, still parser-specific
-          </div>
-          <h1 className="mb-4 bg-gradient-to-b from-white to-zinc-500 bg-clip-text text-5xl font-extrabold tracking-tight text-transparent md:text-6xl">
-            Statementify
+    <div className="mx-auto max-w-7xl px-6 py-10 md:px-8 md:py-14">
+      <div className="sr-only" aria-live="polite" aria-atomic="true">
+        {isProcessing
+          ? `${files.length > 1 ? `Processing ${files.length} statements.` : "Processing statement."} ${ocrStatus}`
+          : error
+            ? `Error: ${error}`
+            : lastExportedFormat
+              ? `Exported ${EXPORT_CONFIG[lastExportedFormat].label} at ${lastExportedAt}.`
+              : processingSummary || "Ready."}
+      </div>
+
+      <section className="mb-8 grid gap-6 lg:grid-cols-[1.35fr_0.85fr]">
+        <div className="animate-fade-in">
+          <StatusBadge>Local-first finance document cleanup</StatusBadge>
+          <h1 className="mt-5 max-w-4xl text-balance text-5xl font-black tracking-[-0.04em] text-slate-950 md:text-6xl">
+            Turn bank statement PDFs into clean, reviewable transaction exports.
           </h1>
-          <p className="mx-auto max-w-2xl text-xl leading-relaxed text-[var(--muted-foreground)]">
-            Turn PDF bank statements into clean transaction exports. Upload one or more PDFs, review the extracted rows, then download CSV, Excel, JSON, OFX/QFX, or QIF.
+          <p className="mt-5 max-w-3xl text-balance text-lg leading-8 text-[var(--muted-foreground)] md:text-xl">
+            Statementify keeps the flow dead simple: upload PDFs, extract transactions, review the rows, then export the final list in the format your spreadsheet or finance app actually wants.
           </p>
-          <div className="mx-auto mt-6 max-w-3xl rounded-2xl border border-[var(--border)] bg-[var(--card)]/70 p-4 text-left text-sm text-[var(--muted-foreground)]">
-            <p className="font-medium text-[var(--foreground)]">What to expect</p>
-            <ul className="mt-2 space-y-2">
-              <li>• Text-based PDFs are tried first. Scanned PDFs fall back to OCR and may need manual cleanup.</li>
-              <li>• If you upload multiple statements, Statementify combines them into one list and sorts by date.</li>
-              <li>• No fake guarantees: support varies by statement layout, so always review before importing.</li>
-            </ul>
+
+          <div className="mt-8 flex flex-wrap gap-3">
+            {[
+              "Embedded text first for speed",
+              "OCR fallback for scanned statements",
+              "Manual review before export",
+            ].map((item) => (
+              <span
+                key={item}
+                className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-sm font-medium text-[var(--foreground)] shadow-sm"
+              >
+                {item}
+              </span>
+            ))}
+          </div>
+
+          <div className="mt-8 grid gap-3 sm:grid-cols-3">
+            {workflowSteps.map((step, index) => {
+              const isActive =
+                (view === "upload" && step.key === "upload") ||
+                (view === "preview" && step.key === "preview") ||
+                (view === "export" && step.key === "export");
+
+              return (
+                <div
+                  key={step.key}
+                  className={`rounded-2xl border px-4 py-4 ${
+                    isActive ? "border-[var(--accent)]/25 bg-[var(--accent-soft)]" : "border-[var(--border)] bg-white/80"
+                  }`}
+                >
+                  <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">Step {index + 1}</p>
+                  <p className="mt-2 text-sm font-semibold text-[var(--foreground)]">{step.label}</p>
+                  <p className="mt-1 text-sm leading-6 text-[var(--muted-foreground)]">{step.desc}</p>
+                </div>
+              );
+            })}
           </div>
         </div>
+
+        <div className="glass-card animate-fade-in rounded-[32px] p-6" style={{ animationDelay: "60ms" }}>
+          <div className="flex items-start justify-between gap-4">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.22em] text-[var(--muted-foreground)]">Why it feels fast</p>
+              <p className="mt-2 text-lg font-semibold text-[var(--foreground)]">Optimized for the common case</p>
+            </div>
+            <div className="rounded-2xl bg-[var(--accent-soft)] p-3 text-[var(--accent)]">
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
+                <path d="M13 2L4 14h6l-1 8 9-12h-6l1-8Z" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            </div>
+          </div>
+          <div className="mt-6 space-y-4">
+            {quickStats.map((item) => (
+              <div key={item.label} className="surface-soft rounded-2xl px-4 py-3">
+                <p className="text-xs font-semibold uppercase tracking-[0.18em] text-[var(--muted-foreground)]">{item.label}</p>
+                <p className="mt-1 text-sm font-medium leading-6 text-[var(--foreground)]">{item.value}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {view === "upload" && (
+        <section className="mb-8 animate-fade-in rounded-[32px] border border-[var(--border)] bg-white/70 p-6 shadow-[0_20px_50px_rgba(15,23,42,0.06)] backdrop-blur-xl md:p-8">
+          <div className="grid gap-6 lg:grid-cols-[1.2fr_0.8fr] lg:items-start">
+            <div>
+              <p className="text-sm font-semibold text-[var(--foreground)]">What to expect</p>
+              <ul className="mt-3 space-y-3 text-sm leading-7 text-[var(--muted-foreground)]">
+                <li>• Text-based PDFs are tried first. Scanned PDFs fall back to OCR and may need cleanup.</li>
+                <li>• Multiple statements are combined into one list and sorted by date before export.</li>
+                <li>• Parser support still varies by bank layout, so final review is part of the workflow, not an afterthought.</li>
+              </ul>
+            </div>
+            <div className="surface-soft rounded-3xl p-5">
+              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[var(--muted-foreground)]">Trust note</p>
+              <p className="mt-2 text-sm leading-7 text-[var(--foreground)]">
+                Parsing runs in the browser. OCR assets still load from a CDN by default unless you self-host the pdf.js worker bundle.
+              </p>
+              <ul className="mt-4 space-y-2 text-sm leading-6 text-[var(--foreground)]">
+                {trustChecklist.map((item) => (
+                  <li key={item} className="flex items-start gap-2">
+                    <span className="mt-1 inline-block h-2 w-2 rounded-full bg-[var(--accent)]" />
+                    <span>{item}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        </section>
       )}
 
       {error && (
-        <div className="mb-6 flex items-center gap-3 rounded-xl border border-red-500/30 bg-red-500/10 p-4 animate-fade-in">
-          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 text-red-400">
+        <div className="mb-6 flex items-center gap-3 rounded-2xl border border-[var(--danger)]/18 bg-[var(--danger-soft)] p-4 animate-fade-in">
+          <svg width="16" height="16" viewBox="0 0 16 16" fill="none" className="flex-shrink-0 text-[var(--danger)]">
             <circle cx="8" cy="8" r="6" stroke="currentColor" strokeWidth="1.5" />
             <path d="M8 5v3M8 10v1" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
-          <p className="text-sm text-red-300">{error}</p>
+          <p className="text-sm font-medium text-[var(--danger)]">{error}</p>
         </div>
       )}
 
       {view === "upload" && !isProcessing && (
         <>
           <div
-            {...getRootProps()}
+            {...getRootProps({
+              role: "button",
+              "aria-label": "Upload statement PDFs",
+              "aria-describedby": "upload-help upload-trust",
+            })}
             className={`
-              relative cursor-pointer rounded-2xl border-2 border-dashed transition-all duration-300 ease-out
+              relative cursor-pointer overflow-hidden rounded-[36px] border-2 border-dashed transition-all duration-300 ease-out focus:outline-none focus-visible:ring-4 focus-visible:ring-[var(--accent-soft)]
               ${
                 isDragActive
-                  ? "border-[var(--accent)] bg-[var(--accent)]/5 animate-pulse-border glow"
-                  : "border-[var(--border)] hover:border-[var(--accent)]/50 hover:bg-[var(--muted)]/30"
+                  ? "border-[var(--accent)] bg-[var(--accent-soft)] animate-pulse-border glow"
+                  : "border-[var(--border-strong)] bg-white hover:border-[var(--accent)]/45 hover:bg-white"
               }
             `}
           >
             <input {...getInputProps()} />
-            <div className="flex flex-col items-center justify-center px-6 py-24 text-center">
+            <div className="pointer-events-none absolute inset-x-0 top-0 h-40 bg-gradient-to-b from-[var(--accent-soft)] to-transparent opacity-80" />
+            <div className="relative flex flex-col items-center justify-center px-6 py-20 text-center md:px-10 md:py-24">
               <div
                 className={`
-                  mb-6 flex h-20 w-20 items-center justify-center rounded-2xl transition-all duration-300
-                  ${isDragActive ? "scale-110 bg-[var(--accent)]/20" : "bg-[var(--muted)]"}
+                  mb-6 flex h-20 w-20 items-center justify-center rounded-[28px] border shadow-sm transition-all duration-300
+                  ${isDragActive ? "scale-105 border-[var(--accent)]/20 bg-white text-[var(--accent)]" : "border-[var(--border)] bg-[var(--muted)] text-[var(--accent)]"}
                 `}
               >
-                <svg
-                  width="36"
-                  height="36"
-                  viewBox="0 0 36 36"
-                  fill="none"
-                  className={isDragActive ? "text-[var(--accent)]" : "text-[var(--muted-foreground)]"}
-                >
+                <svg width="36" height="36" viewBox="0 0 36 36" fill="none">
                   <path d="M18 24V12M18 12L13 17M18 12L23 17" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                   <path d="M28 22v4a4 4 0 0 1-4 4H12a4 4 0 0 1-4-4v-4" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
                 </svg>
               </div>
-              <h3 className="mb-2 text-lg font-semibold">{isDragActive ? "Drop your PDFs here" : "Drag & drop statement PDFs"}</h3>
-              <p className="mb-4 text-sm text-[var(--muted-foreground)]">
-                or <span className="cursor-pointer font-medium text-[var(--accent)] underline underline-offset-2">click to browse</span> — PDF only, up to 10 files
+              <h3 className="mb-3 text-2xl font-bold tracking-[-0.02em] text-slate-950">
+                {isDragActive ? "Drop your statement PDFs" : "Drag in statement PDFs or click to browse"}
+              </h3>
+              <p id="upload-help" className="mb-5 max-w-2xl text-sm leading-7 text-[var(--muted-foreground)] md:text-base">
+                PDF only, up to 10 files. Text PDFs usually finish fast; scanned files take longer because OCR runs page by page.
               </p>
               <div className="flex flex-wrap items-center justify-center gap-3">
-                {["Text PDFs", "Scanned PDFs", "Manual review before export", "Local-first processing"].map((item) => (
+                {[
+                  "Text PDFs",
+                  "Scanned PDFs",
+                  "Editable review step",
+                  "Local-first processing",
+                ].map((item) => (
                   <span
                     key={item}
-                    className="rounded-full border border-[var(--border)] bg-[var(--card)] px-2.5 py-1 text-xs text-[var(--muted-foreground)]"
+                    className="rounded-full border border-[var(--border)] bg-white px-3 py-1.5 text-xs font-semibold text-[var(--muted-foreground)] shadow-sm"
                   >
                     {item}
                   </span>
@@ -433,24 +592,15 @@ export default function HomePage() {
             </div>
           </div>
 
+          <p id="upload-trust" className="mt-6 text-center text-xs font-medium uppercase tracking-[0.18em] text-[var(--muted-foreground)]">
+            Review is expected. Export only after checking the rows.
+          </p>
+
           <div className="mt-8 grid gap-4 md:grid-cols-3">
-            {[
-              {
-                title: "Review before export",
-                desc: "Every run lands in an editable table first, so you can fix dates, descriptions, signs, and duplicates before downloading.",
-              },
-              {
-                title: "Straight answer on privacy",
-                desc: "Parsing runs in the browser. OCR assets load from a CDN by default unless you self-host the pdf.js worker bundle.",
-              },
-              {
-                title: "Built for real imports",
-                desc: "Export to CSV, Excel, JSON, OFX/QFX, or QIF for spreadsheets and finance apps without hand-retyping transactions.",
-              },
-            ].map((feature) => (
-              <div key={feature.title} className="rounded-xl border border-[var(--border)] bg-[var(--card)] p-5">
-                <h3 className="mb-2 font-semibold text-[var(--foreground)]">{feature.title}</h3>
-                <p className="text-sm leading-relaxed text-[var(--muted-foreground)]">{feature.desc}</p>
+            {FEATURE_CARDS.map((feature) => (
+              <div key={feature.title} className="glass-card rounded-[28px] p-6">
+                <h3 className="text-base font-semibold text-[var(--foreground)]">{feature.title}</h3>
+                <p className="mt-2 text-sm leading-7 text-[var(--muted-foreground)]">{feature.desc}</p>
               </div>
             ))}
           </div>
@@ -458,26 +608,42 @@ export default function HomePage() {
       )}
 
       {isProcessing && (
-        <div className="flex flex-col items-center justify-center py-32 animate-fade-in">
-          <div className="glow mb-6 flex h-16 w-16 items-center justify-center rounded-2xl border-2 border-[var(--border)]">
+        <div className="glass-card flex flex-col items-center justify-center rounded-[36px] py-24 text-center animate-fade-in">
+          <div className="glow mb-6 flex h-16 w-16 items-center justify-center rounded-3xl border border-[var(--border)] bg-white">
             <Spinner size={32} />
           </div>
-          <h3 className="mb-2 text-lg font-semibold">{files.length > 1 ? `Processing ${files.length} statements…` : "Scanning statement…"}</h3>
-          {ocrStatus && <p className="mb-1 animate-pulse text-sm text-[var(--accent)]">{ocrStatus}</p>}
-          <p className="text-xs text-[var(--muted-foreground)]">Scanned documents can take longer because OCR runs page by page.</p>
+          <h3 className="mb-2 text-xl font-bold tracking-[-0.02em] text-[var(--foreground)]">
+            {files.length > 1 ? `Processing ${files.length} statements…` : "Scanning statement…"}
+          </h3>
+          {ocrStatus && <p className="mb-1 text-sm font-medium text-[var(--accent)]">{ocrStatus}</p>}
+          <p className="text-sm text-[var(--muted-foreground)]">Scanned documents take longer because OCR runs page by page.</p>
         </div>
       )}
 
       {!isProcessing && processingSummary && (
-        <div className="mb-6 rounded-xl border border-[var(--border)] bg-[var(--card)] px-4 py-3 text-sm text-[var(--muted-foreground)]">
+        <div className="glass-card mb-6 rounded-2xl px-4 py-3 text-sm text-[var(--muted-foreground)]">
           {processingSummary}
+        </div>
+      )}
+
+      {!isProcessing && lastExportedFormat && view === "export" && (
+        <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-[var(--success)]/18 bg-[var(--success-soft)] px-4 py-3 text-sm text-[var(--success)] animate-fade-in">
+          <div>
+            <p className="font-semibold">{EXPORT_CONFIG[lastExportedFormat].label} exported successfully</p>
+            <p className="mt-1 text-[13px] text-[var(--foreground)]/75">
+              Download started at {lastExportedAt}. You can still go back, edit rows, and export again in another format.
+            </p>
+          </div>
+          <span className="rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-[0.16em] text-[var(--success)]">
+            Ready for another export
+          </span>
         </div>
       )}
 
       {view === "preview" && !isProcessing && (
         <div className="space-y-6 animate-fade-in">
           <ExportBar />
-          <div className="overflow-hidden rounded-xl border border-[var(--accent)]/30 bg-[var(--card)]">
+          <div className="glass-card overflow-hidden rounded-[32px]">
             <TransactionEditor
               transactions={editedTransactions}
               accountType={editedAccountType}
@@ -492,24 +658,33 @@ export default function HomePage() {
       {view === "export" && !isProcessing && (
         <div className="space-y-6 animate-fade-in">
           <ExportBar showBack />
-          <div className="overflow-hidden rounded-xl border border-[var(--border)] bg-[var(--card)]">
+          <div className="glass-card overflow-hidden rounded-[32px]">
             <TransactionTable transactions={editedTransactions} />
           </div>
         </div>
       )}
 
-      <footer className="mt-16 border-t border-[var(--border)] pt-6 text-sm text-[var(--muted-foreground)]">
-        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-1">
-            <p className="font-medium text-[var(--foreground)]">Statementify</p>
-            <p>No fake privacy, terms, or contact pages here. Review your exports before importing them anywhere important.</p>
+      <footer className="mt-16 border-t border-[var(--border)] pt-8 text-sm text-[var(--muted-foreground)]">
+        <div className="flex flex-col gap-6 md:flex-row md:items-end md:justify-between">
+          <div className="space-y-2">
+            <p className="font-semibold text-[var(--foreground)]">Statementify</p>
+            <p className="max-w-2xl leading-7">No fake guarantees. Review your exports before importing them anywhere important.</p>
+            <p className="max-w-3xl text-xs leading-6 text-[var(--muted-foreground)]">
+              © {new Date().getFullYear()} Miguel Ramirez. All rights reserved. Statementify is an independent software service owned and operated by Miguel Ramirez.
+            </p>
           </div>
-          <div className="flex flex-wrap items-center gap-4">
-            <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-[var(--foreground)]">
+          <div className="flex flex-wrap items-center gap-4 text-[var(--foreground)] md:justify-end">
+            <a href={SOURCE_URL} target="_blank" rel="noreferrer" className="transition-colors hover:text-[var(--accent)]">
               Source code
             </a>
-            <a href={`${SOURCE_URL}/issues`} target="_blank" rel="noreferrer" className="transition-colors hover:text-[var(--foreground)]">
-              Report a parser issue
+            <a href="/support" className="transition-colors hover:text-[var(--accent)]">
+              Support
+            </a>
+            <a href="/privacy" className="transition-colors hover:text-[var(--accent)]">
+              Privacy
+            </a>
+            <a href="/terms" className="transition-colors hover:text-[var(--accent)]">
+              Terms
             </a>
           </div>
         </div>
