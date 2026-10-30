@@ -230,13 +230,16 @@ export default function HomePage() {
       const summaries: string[] = [];
 
       for (const file of filesToProcess) {
-        const { transactions: txns, rawText, method, textLength } = await processStatementFile(file, (status) => {
+        const { transactions: txns, rawText, method, textLength, pageCount, ocrPages } = await processStatementFile(file, (status) => {
           setOcrStatus(status);
         });
 
         lastRawText = rawText;
-        summaries.push(`${file.name}: ${method === "text" ? "embedded text" : "OCR fallback"} (${txns.length} transactions)`);
-        setProcessingSummary(`Last file used ${method === "text" ? "embedded text" : "OCR fallback"} · ${textLength.toLocaleString()} chars extracted`);
+        const methodLabel = ocrPages > 0
+          ? `${method === "ocr" ? "OCR" : "embedded text, OCR checked"} ${ocrPages}/${pageCount} pages`
+          : "embedded text";
+        summaries.push(`${file.name}: ${methodLabel} (${txns.length} transactions)`);
+        setProcessingSummary(`Last file used ${methodLabel} · ${textLength.toLocaleString()} chars extracted`);
         allTransactions.push(...txns);
       }
 
