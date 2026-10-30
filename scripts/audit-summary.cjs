@@ -7,7 +7,7 @@ function summarizeAudit(report) {
 
   const counts = report.metadata.vulnerabilities;
   const findings = Object.entries(report.vulnerabilities || {})
-    .filter(([, item]) => ["high", "critical"].includes(item.severity))
+    .filter(([, item]) => ["moderate", "high", "critical"].includes(item.severity))
     .map(([name, item]) => ({
       name,
       severity: item.severity,
