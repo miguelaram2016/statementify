@@ -359,34 +359,41 @@ export default function HomePage() {
     setView("export");
   };
 
-  const handleExport = (format: ExportFormat) => {
+  const handleExport = async (format: ExportFormat) => {
     const filename = files.length === 1 ? files[0].name.replace(/\.pdf$/i, "") : "transactions";
+    setError(null);
 
-    switch (format) {
-      case "csv":
-        downloadCSV(editedTransactions, filename);
-        break;
-      case "excel":
-        downloadExcel(editedTransactions, filename);
-        break;
-      case "json":
-        downloadJSON(editedTransactions, filename);
-        break;
-      case "ofx":
-        downloadOFX(editedTransactions, filename);
-        break;
-      case "qif":
-        downloadQIF(editedTransactions, filename);
-        break;
+    try {
+      switch (format) {
+        case "csv":
+          downloadCSV(editedTransactions, filename);
+          break;
+        case "excel":
+          await downloadExcel(editedTransactions, filename);
+          break;
+        case "json":
+          downloadJSON(editedTransactions, filename);
+          break;
+        case "ofx":
+          downloadOFX(editedTransactions, filename);
+          break;
+        case "qif":
+          downloadQIF(editedTransactions, filename);
+          break;
+      }
+
+      setLastExportedFormat(format);
+      setLastExportedAt(
+        new Date().toLocaleTimeString([], {
+          hour: "numeric",
+          minute: "2-digit",
+        })
+      );
+    } catch {
+      // Do not claim an export succeeded when the browser writer failed.
+      setLastExportedFormat(null);
+      setError("Could not create the selected export. Please try again.");
     }
-
-    setLastExportedFormat(format);
-    setLastExportedAt(
-      new Date().toLocaleTimeString([], {
-        hour: "numeric",
-        minute: "2-digit",
-      })
-    );
   };
 
   const ExportBar = ({ showBack }: { showBack?: boolean }) => (
