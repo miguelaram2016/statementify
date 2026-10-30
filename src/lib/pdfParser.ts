@@ -381,7 +381,7 @@ function shouldSkipTransaction(description: string, amount: number): boolean {
  * - extract the most likely amount
  * - clean the leftover description text
  * - infer the final sign based on account type
- * - de-duplicate the final output
+ * - preserve repeated transactions for explicit review
  */
 export function parseTransactionsFromText(text: string, accountType?: AccountType): Transaction[] {
 
@@ -394,6 +394,15 @@ export function parseTransactionsFromText(text: string, accountType?: AccountTyp
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
+
+  // Only treat the final monetary column as a running balance when a
+  // transaction-table header explicitly identifies it. A general "ending
+  // balance" elsewhere on a statement is not enough evidence.
+  const hasRunningBalanceColumn = ctx.accountType === "checking" && lines.some(
+    (line) => /\bdate\b/i.test(line) &&
+      /\b(?:amount|debit|credit|withdrawal|deposit)\b/i.test(line) &&
+      /\bbalance\b/i.test(line)
+  );
 
   const transactions: Transaction[] = [];
   const usedLines = new Set<number>();
@@ -429,9 +438,14 @@ export function parseTransactionsFromText(text: string, accountType?: AccountTyp
     const nonZeroAmounts = amounts.filter((amount) => amount > 0);
     if (nonZeroAmounts.length === 0) continue;
 
-    // Most statement rows end with the transaction amount, while earlier numbers
-    // tend to be balances, references, or repeated OCR fragments.
-    let amount = nonZeroAmounts[nonZeroAmounts.length - 1];
+    // In checking tables explicitly labelled "Amount | Balance", the final
+    // figure is a running balance, not the transaction amount. Read the two
+    // monetary columns from the dated row (not a numeric continuation line).
+    // Otherwise retain the established last-amount heuristic.
+    const rowAmounts = hasRunningBalanceColumn ? extractAmounts(line) : [];
+    let amount = hasRunningBalanceColumn && rowAmounts.length >= 2
+      ? rowAmounts[rowAmounts.length - 2]
+      : nonZeroAmounts[nonZeroAmounts.length - 1];
     const primaryDate = dateMatches[0];
 
     let description = cleanDescription(combined);
@@ -455,14 +469,9 @@ export function parseTransactionsFromText(text: string, accountType?: AccountTyp
     });
   }
 
+  // Same-day purchases can legitimately share a description and amount.
+  // Avoid silently dropping them: any duplicate removal needs source-row
+  // evidence or an explicit review action, not transaction-value equality.
   transactions.sort((a, b) => (a.date > b.date ? 1 : -1));
-
-  const seen = new Set<string>();
-  const unique = transactions.filter((tx) => {
-    const key = `${tx.date}|${tx.description}|${tx.amount}`;
-    if (seen.has(key)) return false;
-    seen.add(key);
-    return true;
-  });
-  return unique;
+  return transactions;
 }
