@@ -464,8 +464,5 @@ export function parseTransactionsFromText(text: string, accountType?: AccountTyp
     seen.add(key);
     return true;
   });
-  unique.slice(0, 5).forEach((tx) => {
-  });
-
   return unique;
 }
