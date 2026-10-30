@@ -35,5 +35,10 @@
   },
   "engines": {
     "node": ">=20.9.0"
+  },
+  "overrides": {
+    "source-map-js": "1.2.2",
+    "baseline-browser-mapping": "2.11.34",
+    "fflate": "0.8.3"
   }
 }

@@ -21,6 +21,10 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
+      - name: Audit production dependencies
+        run: |
+          npm audit --omit=dev --json > "$RUNNER_TEMP/statementify-audit.json" || true
+          node scripts/audit-summary.cjs "$RUNNER_TEMP/statementify-audit.json"
       - run: npm test
       - run: npm run lint
       - run: npm run typecheck
