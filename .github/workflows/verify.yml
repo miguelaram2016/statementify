@@ -2,9 +2,6 @@ name: Statementify checks
 
 on:
   pull_request:
-    branches:
-      - master
-      - fix/redact-statement-parser-logs
   workflow_dispatch:
 
 permissions:
