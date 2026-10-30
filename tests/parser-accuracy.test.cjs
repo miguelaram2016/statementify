@@ -11,9 +11,9 @@ const code = ts.transpileModule(source, {
     target: ts.ScriptTarget.ES2020,
   },
 }).outputText;
-const exports = {};
-vm.runInNewContext(code, { exports, Date, Set }, { filename: "pdfParser.js" });
-const { parseTransactionsFromText } = exports;
+const parserModuleExports = {};
+vm.runInNewContext(code, { exports: parserModuleExports, Date, Set }, { filename: "pdfParser.js" });
+const { parseTransactionsFromText } = parserModuleExports;
 
 test("uses amount column rather than running balance in a checking table", () => {
   const text = [
