@@ -55,7 +55,7 @@ test("preserves two real same-day transactions even if values match", () => {
 
   const result = parseTransactionsFromText(text);
   assert.equal(result.length, 2);
-  assert.deepEqual(result.map((tx) => tx.amount), [-12.50, -12.50]);
+  assert.deepEqual(Array.from(result, (tx) => tx.amount), [-12.50, -12.50]);
 });
 
 test("infers the correct year across a December to January statement period", () => {
