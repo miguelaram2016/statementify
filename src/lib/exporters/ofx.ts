@@ -30,7 +30,8 @@ export function generateOFX(transactions: Transaction[]): string {
   for (const tx of sorted) {
     const dateStr = tx.date.replace(/-/g, "");
     const trnType = tx.amount < 0 ? "DEBIT" : "CREDIT";
-    const trnAmt = Math.abs(tx.amount).toFixed(2);
+    // OFX requires signed amounts: negative debit, positive credit.
+    const trnAmt = tx.amount.toFixed(2);
     const name = tx.description.replace(/[<>&"]/g, "").substring(0, 64);
     const memo = tx.description.replace(/[<>&"]/g, "").substring(0, 255);
 
