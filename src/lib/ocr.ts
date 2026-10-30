@@ -21,11 +21,13 @@ interface PdfDocumentLoadingTask {
 interface PdfDocumentProxy {
   numPages: number;
   getPage(pageNumber: number): Promise<PdfPage>;
+  destroy(): Promise<void>;
 }
 interface PdfPage {
   getViewport(opts: { scale: number }): { width: number; height: number };
   render(opts: { canvasContext: CanvasRenderingContext2D; viewport: { width: number; height: number } }): { promise: Promise<void> };
   getTextContent(): Promise<{ items: PdfJsTextItem[] }>;
+  cleanup(): boolean;
 }
 
 declare global {
@@ -39,6 +41,8 @@ export interface ProcessedDocumentResult {
   rawText: string;
   method: "text" | "ocr";
   textLength: number;
+  pageCount: number;
+  ocrPages: number;
 }
 
 /**
@@ -88,7 +92,7 @@ function loadPdf(file: File): Promise<PdfDocumentProxy> {
 async function extractEmbeddedText(
   pdf: PdfDocumentProxy,
   onProgress?: (status: string, page?: number, total?: number) => void
-): Promise<string> {
+): Promise<string[]> {
   const chunks: string[] = [];
 
   for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
@@ -105,67 +109,65 @@ async function extractEmbeddedText(
     chunks.push(pageText);
   }
 
-  return chunks.join("\n\n").trim();
+  return chunks;
 }
 
 /**
- * Renders each PDF page onto a canvas so Tesseract can OCR it.
- *
- * The scale of 2 is a compromise: sharper than 1x for OCR accuracy without
- * exploding memory usage too badly on multi-page statements.
+ * Render and recognize just one page at a time. A single Tesseract worker is
+ * reused for the document, avoiding a new WASM engine and an entire page-canvas
+ * collection for each scanned statement.
  */
-async function renderPdfToImages(
+async function ocrPdfPages(
   pdf: PdfDocumentProxy,
-  onProgress?: (page: number, total: number) => void
-): Promise<HTMLCanvasElement[]> {
-  const canvases: HTMLCanvasElement[] = [];
+  pageNumbers: number[],
+  onProgress?: (status: string, page?: number, total?: number) => void
+): Promise<Map<number, string>> {
+  const results = new Map<number, string>();
+  let activePage = 0;
+  let worker: Awaited<ReturnType<typeof Tesseract.createWorker>> | null = null;
 
-  for (let pageNumber = 1; pageNumber <= pdf.numPages; pageNumber++) {
-    const page = await pdf.getPage(pageNumber);
-    onProgress?.(pageNumber, pdf.numPages);
+  try {
+    for (const pageNumber of pageNumbers) {
+      activePage = pageNumber;
+      onProgress?.(`Rendering page ${pageNumber}/${pdf.numPages} for OCR…`, pageNumber, pdf.numPages);
+      const page = await pdf.getPage(pageNumber);
+      const viewport = page.getViewport({ scale: 2 });
+      const canvas = document.createElement("canvas");
 
-    const viewport = page.getViewport({ scale: 2 });
-    const canvas = document.createElement("canvas");
-    const context = canvas.getContext("2d");
-    if (!context) throw new Error("Could not create canvas context for OCR rendering.");
+      try {
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+        const context = canvas.getContext("2d");
+        if (!context) throw new Error("Could not create canvas context for OCR rendering.");
 
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
+        await page.render({ canvasContext: context, viewport }).promise;
 
-    await page.render({ canvasContext: context, viewport }).promise;
-    canvases.push(canvas);
-  }
-
-  return canvases;
-}
-
-/**
- * OCRs pre-rendered canvases one page at a time.
- *
- * We intentionally keep this sequential. Running multiple OCR jobs in parallel
- * can blow up memory on real-world laptops and often feels slower overall.
- */
-async function ocrCanvases(
-  canvases: HTMLCanvasElement[],
-  onProgress?: (page: number, total: number, status: string) => void
-): Promise<string> {
-  const texts: string[] = [];
-
-  for (let i = 0; i < canvases.length; i++) {
-    onProgress?.(i + 1, canvases.length, "Initializing OCR engine…");
-
-    const result = await Tesseract.recognize(canvases[i], "eng", {
-      logger: (message) => {
-        if (message.status === "recognizing text") {
-          onProgress?.(i + 1, canvases.length, `Scanning page ${i + 1}/${canvases.length}…`);
+        if (!worker) {
+          onProgress?.("Initializing OCR engine…", pageNumber, pdf.numPages);
+          worker = await Tesseract.createWorker("eng", 1, {
+            logger: (message) => {
+              if (message.status === "recognizing text") {
+                onProgress?.(`Scanning page ${activePage}/${pdf.numPages}…`, activePage, pdf.numPages);
+              }
+            },
+          });
         }
-      },
-    });
 
-    texts.push(result.data.text);
+        const result = await worker.recognize(canvas);
+        results.set(pageNumber, result.data.text);
+      } finally {
+        // Returning canvas dimensions to zero releases its large pixel buffer.
+        canvas.width = 0;
+        canvas.height = 0;
+        page.cleanup();
+      }
+    }
+  } finally {
+    // Terminate even if OCR fails midway; no worker survives the document.
+    await worker?.terminate();
   }
 
-  return texts.join("\n").trim();
+  return results;
 }
 
 /**
@@ -202,35 +204,80 @@ export async function processStatementFile(
   onProgress?.("Loading PDF…");
   const pdf = await loadPdf(file);
 
-  onProgress?.("Trying embedded text first…");
-  const embeddedText = await extractEmbeddedText(pdf, onProgress);
-  const embeddedTransactions = embeddedText ? parseTransactionsFromText(embeddedText) : [];
+  try {
+    onProgress?.("Trying embedded text first…");
+    const embeddedPages = await extractEmbeddedText(pdf, onProgress);
+    const embeddedText = embeddedPages.join("\n\n").trim();
+    const embeddedTransactions = embeddedText ? parseTransactionsFromText(embeddedText) : [];
+    const fullFallback = shouldFallbackToOcr(embeddedText, embeddedTransactions);
 
-  if (!shouldFallbackToOcr(embeddedText, embeddedTransactions)) {
+    // Even when most pages have usable text, a scanned page can be nearly
+    // empty. OCR only those sparse pages so mixed PDFs do not lose transactions.
+    const sparsePages = embeddedPages
+      .map((text, index) => ({ page: index + 1, length: text.replace(/\s+/g, "").length }))
+      .filter(({ length }) => length < 120)
+      .map(({ page }) => page);
+    const pagesToOcr = fullFallback
+      ? Array.from({ length: pdf.numPages }, (_, index) => index + 1)
+      : sparsePages;
+
+    if (pagesToOcr.length === 0) {
+      return {
+        transactions: embeddedTransactions,
+        rawText: embeddedText,
+        method: "text",
+        textLength: embeddedText.length,
+        pageCount: pdf.numPages,
+        ocrPages: 0,
+      };
+    }
+
+    onProgress?.(
+      fullFallback
+        ? "Text layer was not usable. Falling back to OCR…"
+        : `Scanning ${pagesToOcr.length} page(s) without usable text…`
+    );
+    const ocrPages = await ocrPdfPages(pdf, pagesToOcr, onProgress);
+
+    // Keep the original order and the embedded text from pages not scanned.
+    // If OCR cannot read a particular page, retain any existing text instead.
+    const combinedText = embeddedPages
+      .map((text, index) => {
+        const recognized = ocrPages.get(index + 1)?.trim() || "";
+        return recognized.length >= 20 ? recognized : text;
+      })
+      .join("\n\n")
+      .trim();
+
+    if (combinedText.length < 20) {
+      throw new Error("Could not extract readable text from this PDF.");
+    }
+
+    const transactions = parseTransactionsFromText(combinedText);
+
+    // A noisy OCR result should never erase transactions already extracted
+    // successfully from the embedded text layer.
+    if (transactions.length < embeddedTransactions.length) {
+      return {
+        transactions: embeddedTransactions,
+        rawText: embeddedText,
+        method: "text",
+        textLength: embeddedText.length,
+        pageCount: pdf.numPages,
+        ocrPages: pagesToOcr.length,
+      };
+    }
+
     return {
-      transactions: embeddedTransactions,
-      rawText: embeddedText,
-      method: "text",
-      textLength: embeddedText.length,
+      transactions,
+      rawText: combinedText,
+      method: "ocr",
+      textLength: combinedText.length,
+      pageCount: pdf.numPages,
+      ocrPages: pagesToOcr.length,
     };
+  } finally {
+    // Release pdf.js buffers and worker on success and on failure.
+    await pdf.destroy();
   }
-
-  onProgress?.("No usable text layer found. Falling back to OCR…");
-  const canvases = await renderPdfToImages(pdf, (page, total) => {
-    onProgress?.(`Rendering page ${page}/${total} for OCR…`, page, total);
-  });
-
-  const ocrText = await ocrCanvases(canvases, (page, total, status) => onProgress?.(status, page, total));
-  if (!ocrText || ocrText.trim().length < 20) {
-    throw new Error("Could not extract readable text from this PDF.");
-  }
-
-  const ocrTransactions = parseTransactionsFromText(ocrText);
-
-  return {
-    transactions: ocrTransactions,
-    rawText: ocrText,
-    method: "ocr",
-    textLength: ocrText.length,
-  };
 }
