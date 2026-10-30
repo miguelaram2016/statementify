@@ -3,44 +3,43 @@ import { parseTransactionsFromText } from "@/lib/pdfParser";
 
 export const runtime = "nodejs";
 
+const MAX_PDF_BYTES = 15 * 1024 * 1024;
+
 export async function POST(req: NextRequest) {
   try {
     const formData = await req.formData();
-    const file = formData.get("file") as File | null;
+    const file = formData.get("file");
 
-    if (!file) {
-      return NextResponse.json({ error: "No file provided" }, { status: 400 });
+    if (!(file instanceof File)) {
+      return NextResponse.json({ error: "No PDF file provided" }, { status: 400 });
     }
 
-    if (!file.name.toLowerCase().endsWith(".pdf")) {
+    if (!file.name.toLowerCase().endsWith(".pdf") || (file.type && file.type !== "application/pdf")) {
       return NextResponse.json({ error: "Only PDF files are supported" }, { status: 400 });
     }
 
-    console.log("[api/parse] Processing file:", file.name, file.size, "bytes");
+    if (file.size === 0 || file.size > MAX_PDF_BYTES) {
+      return NextResponse.json({ error: "PDF must be between 1 byte and 15 MB" }, { status: 413 });
+    }
 
-    const arrayBuffer = await file.arrayBuffer();
-    const buffer = Buffer.from(arrayBuffer);
-    console.log("[api/parse] Buffer created, size:", buffer.length);
+    const buffer = Buffer.from(await file.arrayBuffer());
+    if (buffer.subarray(0, 5).toString("ascii") !== "%PDF-") {
+      return NextResponse.json({ error: "Invalid PDF file" }, { status: 400 });
+    }
 
-    // Use pdf-parse v1.1.1 (pure Node.js, no DOMMatrix)
+    // Do not log filenames, document text, transaction details, or exception stacks.
     const pdfParse = require("pdf-parse");
     const data = await pdfParse(buffer);
     const rawText = data.text || "";
-    console.log("[api/parse] Text extracted, length:", rawText.length, "chars");
-    console.log("[api/parse] Raw text sample:", rawText.substring(0, 300));
-
     const transactions = parseTransactionsFromText(rawText);
-    console.log("[api/parse] Transactions parsed:", transactions.length);
 
     return NextResponse.json({
       transactions,
       count: transactions.length,
       rawLength: rawText.length,
     });
-  } catch (error) {
-    const message = error instanceof Error ? error.message : "Unknown error";
-    console.error("[api/parse] ERROR:", message);
-    console.error("[api/parse] Stack:", error instanceof Error ? error.stack : String(error));
-    return NextResponse.json({ error: message }, { status: 500 });
+  } catch {
+    // Parser/library exceptions may contain document text or other private metadata.
+    return NextResponse.json({ error: "Could not process this PDF" }, { status: 500 });
   }
 }

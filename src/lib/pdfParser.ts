@@ -384,22 +384,16 @@ function shouldSkipTransaction(description: string, amount: number): boolean {
  * - de-duplicate the final output
  */
 export function parseTransactionsFromText(text: string, accountType?: AccountType): Transaction[] {
-  console.log("[pdfParser] Input text length:", text.length);
 
   const ctx: StatementContext = {
     accountType: accountType || detectStatementType(text),
     ...extractStatementPeriod(text),
   };
 
-  console.log("[pdfParser] Detected account type:", ctx.accountType);
-  console.log("[pdfParser] Statement period:", ctx.startDate?.toISOString(), ctx.endDate?.toISOString());
-
   const lines = text
     .split(/\r?\n/)
     .map((line) => line.trim())
     .filter(Boolean);
-
-  console.log("[pdfParser] Total non-empty lines:", lines.length);
 
   const transactions: Transaction[] = [];
   const usedLines = new Set<number>();
@@ -470,10 +464,7 @@ export function parseTransactionsFromText(text: string, accountType?: AccountTyp
     seen.add(key);
     return true;
   });
-
-  console.log(`[pdfParser] Found ${unique.length} transactions`);
   unique.slice(0, 5).forEach((tx) => {
-    console.log(`  ${tx.date} | ${tx.description.slice(0, 40)} | $${tx.amount.toFixed(2)}`);
   });
 
   return unique;

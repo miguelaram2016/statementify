@@ -206,9 +206,6 @@ export async function processStatementFile(
   const embeddedText = await extractEmbeddedText(pdf, onProgress);
   const embeddedTransactions = embeddedText ? parseTransactionsFromText(embeddedText) : [];
 
-  console.log("[pipeline] Embedded text length:", embeddedText.length);
-  console.log("[pipeline] Embedded text transactions:", embeddedTransactions.length);
-
   if (!shouldFallbackToOcr(embeddedText, embeddedTransactions)) {
     return {
       transactions: embeddedTransactions,
@@ -229,9 +226,6 @@ export async function processStatementFile(
   }
 
   const ocrTransactions = parseTransactionsFromText(ocrText);
-
-  console.log("[pipeline] OCR text length:", ocrText.length);
-  console.log("[pipeline] OCR transactions:", ocrTransactions.length);
 
   return {
     transactions: ocrTransactions,
