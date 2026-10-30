@@ -22,7 +22,7 @@ test("high advisories fail the runtime dependency gate", () => {
     },
   });
   assert.equal(result.passesSecurityGate, false);
-  assert.equal(result.findings.length, 1);
+  assert.equal(result.findings.length, 2);
   assert.equal(result.findings[0].name, "indirect");
 });
 
