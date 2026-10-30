@@ -2,6 +2,10 @@ name: Statementify checks
 
 on:
   pull_request:
+  push:
+    branches: [master]
+  schedule:
+    - cron: "17 13 * * 1"
   workflow_dispatch:
 
 permissions:
@@ -19,4 +23,5 @@ jobs:
       - run: npm ci
       - run: npm test
       - run: npm run lint
+      - run: npm run typecheck
       - run: npm run build

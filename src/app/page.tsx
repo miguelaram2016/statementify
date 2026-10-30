@@ -1,3 +1,5 @@
+"use client";
+
 import dynamic from "next/dynamic";
 
 // Load the app client-side only — pdfjs-dist requires browser APIs (DOMMatrix)
