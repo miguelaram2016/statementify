@@ -1,26 +1,29 @@
 import type { Transaction } from "@/lib/pdfParser";
-import * as XLSX from "xlsx";
+import writeExcelFile from "write-excel-file/browser";
 
-export function downloadExcel(transactions: Transaction[], filename = "transactions") {
-  const data = transactions.map((tx) => ({
-    Date: tx.date,
-    Description: tx.description,
-    Amount: tx.amount,
-    Balance: tx.balance ?? null,
-  }));
+type CellValue = string | number | null;
 
-  const worksheet = XLSX.utils.json_to_sheet(data);
-  const workbook = XLSX.utils.book_new();
-  XLSX.utils.book_append_sheet(workbook, worksheet, "Transactions");
-
-  // Auto-width columns
-  const cols = [
-    { wch: 12 },
-    { wch: 50 },
-    { wch: 14 },
-    { wch: 14 },
+/**
+ * Keep the original four-column export layout. Descriptions (including strings
+ * starting with "=") stay text, never spreadsheet formulas.
+ */
+export function buildExcelRows(transactions: Transaction[]): CellValue[][] {
+  return [
+    ["Date", "Description", "Amount", "Balance"],
+    ...transactions.map((tx): CellValue[] => [
+      tx.date,
+      tx.description,
+      tx.amount,
+      tx.balance ?? null,
+    ]),
   ];
-  worksheet["!cols"] = cols;
+}
 
-  XLSX.writeFile(workbook, `${filename}.xlsx`);
+export async function downloadExcel(transactions: Transaction[], filename = "transactions"): Promise<void> {
+  const rows = buildExcelRows(transactions);
+  await writeExcelFile(rows, {
+    sheet: "Transactions",
+    columns: [{ width: 12 }, { width: 50 }, { width: 14 }, { width: 14 }],
+    stickyRowsCount: 1,
+  }).toFile(`${filename}.xlsx`);
 }
