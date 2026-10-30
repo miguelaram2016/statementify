@@ -19,7 +19,7 @@ function summarizeAudit(report) {
   return {
     counts,
     findings,
-    passesCriticalGate: (counts.critical || 0) === 0,
+    passesSecurityGate: (counts.critical || 0) === 0 && (counts.high || 0) === 0,
   };
 }
 
@@ -30,8 +30,8 @@ if (require.main === module) {
     for (const item of result.findings) {
       console.log(`  ${item.severity}: ${item.name} (${item.direct ? "direct" : "transitive"}, ${item.fixable ? "fix available" : "no direct fix"})`);
     }
-    if (!result.passesCriticalGate) {
-      console.error("Critical production dependency advisories detected.");
+    if (!result.passesSecurityGate) {
+      console.error("High or critical production dependency advisories detected.");
       process.exitCode = 1;
     }
   } catch (error) {
