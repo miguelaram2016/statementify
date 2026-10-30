@@ -2,15 +2,24 @@ import { defineConfig, globalIgnores } from "eslint/config";
 import nextVitals from "eslint-config-next/core-web-vitals";
 import nextTs from "eslint-config-next/typescript";
 
+// New React hook rules catch existing patterns that should be refactored
+// separately. Keep the findings visible without blocking this upgrade.
+const legacyHookRules = {
+  "react-hooks/static-components": "warn",
+  "react-hooks/set-state-in-effect": "warn",
+};
+
+const tunedVitals = nextVitals.map((entry) => (
+  entry.plugins?.["react-hooks"]
+    ? { ...entry, rules: { ...entry.rules, ...legacyHookRules } }
+    : entry
+));
+
 export default defineConfig([
-  ...nextVitals,
+  ...tunedVitals,
   ...nextTs,
   {
-    // These existing patterns predate the framework upgrade. Report them,
-    // but don't block a security migration on an unrelated UI refactor.
     rules: {
-      "react-hooks/static-components": "warn",
-      "react-hooks/set-state-in-effect": "warn",
       "@next/next/no-html-link-for-pages": "warn",
       "@typescript-eslint/no-require-imports": "off",
     },
