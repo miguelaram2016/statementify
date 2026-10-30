@@ -9,11 +9,11 @@ test("critical production advisories fail the audit gate", () => {
       unsafe: { severity: "critical", isDirect: true, fixAvailable: false },
     },
   });
-  assert.equal(result.passesCriticalGate, false);
+  assert.equal(result.passesSecurityGate, false);
   assert.equal(result.findings[0].name, "unsafe");
 });
 
-test("high and moderate advisories are reported without a false critical failure", () => {
+test("high advisories fail the runtime dependency gate", () => {
   const result = summarizeAudit({
     metadata: { vulnerabilities: { critical: 0, high: 1, moderate: 1, low: 0 } },
     vulnerabilities: {
@@ -21,9 +21,17 @@ test("high and moderate advisories are reported without a false critical failure
       medium: { severity: "moderate", isDirect: true, fixAvailable: true },
     },
   });
-  assert.equal(result.passesCriticalGate, true);
+  assert.equal(result.passesSecurityGate, false);
   assert.equal(result.findings.length, 1);
   assert.equal(result.findings[0].name, "indirect");
+});
+
+test("moderate-only advisories are reported without blocking", () => {
+  const result = summarizeAudit({
+    metadata: { vulnerabilities: { critical: 0, high: 0, moderate: 1, low: 0 } },
+    vulnerabilities: {},
+  });
+  assert.equal(result.passesSecurityGate, true);
 });
 
 test("invalid audit reports are not treated as safe", () => {
