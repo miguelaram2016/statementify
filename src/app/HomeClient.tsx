@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useCallback, useMemo, useState } from "react";
+import React, { useCallback, useMemo, useRef, useState } from "react";
 import { useDropzone } from "react-dropzone";
 import TransactionTable from "@/components/TransactionTable";
 import TransactionEditor from "@/components/TransactionEditor";
+import ExtractionInspector, { type ExtractionInspection } from "@/components/ExtractionInspector";
 import { type Transaction, detectStatementType } from "@/lib/pdfParser";
 import { processStatementFile } from "@/lib/ocr";
 import { downloadCSV } from "@/lib/exporters/csv";
@@ -189,6 +190,16 @@ export default function HomePage() {
   const [processingSummary, setProcessingSummary] = useState<string>("");
   const [lastExportedFormat, setLastExportedFormat] = useState<ExportFormat | null>(null);
   const [lastExportedAt, setLastExportedAt] = useState<string>("");
+  const [inspectorEnabled, setInspectorEnabled] = useState(false);
+  const [inspectionRecords, setInspectionRecords] = useState<ExtractionInspection[]>([]);
+  const inspectorEnabledRef = useRef(false);
+  const processingRunRef = useRef(0);
+
+  const changeInspectorEnabled = (enabled: boolean) => {
+    inspectorEnabledRef.current = enabled;
+    setInspectorEnabled(enabled);
+    if (!enabled) setInspectionRecords([]);
+  };
 
   const quickStats = useMemo(
     () => [
@@ -218,6 +229,8 @@ export default function HomePage() {
   );
 
   const processFiles = useCallback(async (filesToProcess: File[]) => {
+    const runId = ++processingRunRef.current;
+    setInspectionRecords([]);
     setIsProcessing(true);
     setError(null);
     setTransactions([]);
@@ -228,12 +241,17 @@ export default function HomePage() {
       const allTransactions: Transaction[] = [];
       let lastRawText = "";
       const summaries: string[] = [];
+      const inspected: ExtractionInspection[] = [];
 
       for (const file of filesToProcess) {
         const { transactions: txns, rawText, method, textLength, pageCount, ocrPages } = await processStatementFile(file, (status) => {
-          setOcrStatus(status);
+          if (runId === processingRunRef.current) setOcrStatus(status);
         });
+        if (runId !== processingRunRef.current) return;
 
+        if (inspectorEnabledRef.current) {
+          inspected.push({ fileName: file.name, rawText, transactions: txns, method, textLength, pageCount, ocrPages });
+        }
         lastRawText = rawText;
         const methodLabel = ocrPages > 0
           ? `${method === "ocr" ? "OCR" : "embedded text, OCR checked"} ${ocrPages}/${pageCount} pages`
@@ -243,6 +261,7 @@ export default function HomePage() {
         allTransactions.push(...txns);
       }
 
+      setInspectionRecords(inspectorEnabledRef.current ? inspected : []);
       setProcessingSummary(summaries.join(" • "));
       allTransactions.sort((a, b) => (a.date > b.date ? 1 : -1));
       setTransactions(allTransactions);
@@ -252,11 +271,16 @@ export default function HomePage() {
       setEditedTransactions(allTransactions);
       setView("preview");
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Failed to process PDF");
-      setProcessingSummary("");
+      if (runId === processingRunRef.current) {
+        setInspectionRecords([]);
+        setError(err instanceof Error ? err.message : "Failed to process PDF");
+        setProcessingSummary("");
+      }
     } finally {
-      setIsProcessing(false);
-      setOcrStatus("");
+      if (runId === processingRunRef.current) {
+        setIsProcessing(false);
+        setOcrStatus("");
+      }
     }
   }, []);
 
@@ -285,6 +309,8 @@ export default function HomePage() {
     const newFiles = files.filter((_, fileIndex) => fileIndex !== index);
     setFiles(newFiles);
     if (newFiles.length === 0) {
+      processingRunRef.current++;
+      changeInspectorEnabled(false);
       setTransactions([]);
       setError(null);
       setView("upload");
@@ -296,6 +322,8 @@ export default function HomePage() {
   };
 
   const handleReset = () => {
+    processingRunRef.current++;
+    changeInspectorEnabled(false);
     setFiles([]);
     setTransactions([]);
     setError(null);
@@ -312,6 +340,8 @@ export default function HomePage() {
   };
 
   const handleEditorBack = () => {
+    processingRunRef.current++;
+    changeInspectorEnabled(false);
     setView("upload");
     setEditedTransactions([]);
     setTransactions([]);
@@ -323,6 +353,8 @@ export default function HomePage() {
   };
 
   const handleEditorExport = () => {
+    // Raw text is no longer needed after the review step.
+    changeInspectorEnabled(false);
     setTransactions(editedTransactions);
     setView("export");
   };
@@ -542,6 +574,22 @@ export default function HomePage() {
 
       {view === "upload" && !isProcessing && (
         <>
+          <label className="mb-5 flex items-start gap-3 rounded-2xl border border-[var(--border)] bg-white/80 p-4 text-sm text-[var(--foreground)]">
+            <input
+              type="checkbox"
+              checked={inspectorEnabled}
+              onChange={(event) => changeInspectorEnabled(event.target.checked)}
+              className="mt-1 h-4 w-4 accent-[var(--accent)]"
+            />
+            <span>
+              <span className="block font-semibold">Enable extraction inspector (optional)</span>
+              <span className="mt-1 block leading-6 text-[var(--muted-foreground)]">
+                Temporarily keep extracted statement text in this browser for troubleshooting.
+                It may include account or personal details. Disabled by default, never saved or logged,
+                and cleared when you export, start over, or turn it off.
+              </span>
+            </span>
+          </label>
           <div
             {...getRootProps({
               role: "button",
@@ -646,6 +694,9 @@ export default function HomePage() {
       {view === "preview" && !isProcessing && (
         <div className="space-y-6 animate-fade-in">
           <ExportBar />
+          {inspectorEnabled && inspectionRecords.length > 0 && (
+            <ExtractionInspector records={inspectionRecords} onClear={() => changeInspectorEnabled(false)} />
+          )}
           <div className="glass-card overflow-hidden rounded-[32px]">
             <TransactionEditor
               transactions={editedTransactions}
